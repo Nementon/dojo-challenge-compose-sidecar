@@ -8,4 +8,4 @@ RUN apk add --no-cache docker-cli docker-cli-compose \
 
 COPY . /app
 
-CMD ["python", "app/orchestrator.py"]
+CMD ["python", "-m", "app.orchestrator"]

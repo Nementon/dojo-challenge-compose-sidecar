@@ -5,6 +5,8 @@ import sys
 from typing import Any
 from docker.errors import APIError, NotFound
 from docker.models.containers import Container
+from .dojo_compose_manager import DojoComposeManager
+from .dojo_user_instance import DojoUserInstance
 
 
 def configure_logging() -> None:
@@ -41,11 +43,41 @@ def handle_container_start(
         )
         labels = container.labels or labels
 
-    logger.info(f"""Container {container_id} ({container_name}) started with 
-        - image={image_name} 
-        - labels={labels}
+    logger.info(f"""
+Container {container_id} ({container_name}) started with 
+    - image={image_name} 
+    - labels={labels}
 
 """)
+
+    user_instance = DojoUserInstance(
+        instance_name=container_name,
+        instance_id=container_id,
+        user_id=labels.get("dojo.user_id", ""),
+        dojo_id=labels.get("dojo.dojo_id", ""),
+        module_id=labels.get("dojo.module_id", ""),
+        challenge_id=labels.get("dojo.challenge_id", ""),
+    )
+    if not user_instance.is_valid():
+        logger.debug(
+            f"Container {container_id} does not correspond to a valid DojoUserInstance, skipping compose up"
+        )
+        return
+
+    if user_instance.has_compose_file():
+        logger.debug(
+            f"User instance has compose file, executing docker-compose up for {user_instance.compose_file_path}"
+        )
+        try:
+            DojoComposeManager(user_instance).exec_compose_up()
+        except Exception:
+            logger.exception(
+                f"Error executing docker-compose up for {user_instance.compose_file_path}"
+            )
+    else:
+        logger.debug(
+            f"No compose file found for user instance, skipping compose up << {user_instance.compose_file_path} >>"
+        )
 
 
 def handle_container_stop(
@@ -67,11 +99,41 @@ def handle_container_stop(
         )
         labels = container.labels or labels
 
-    logger.info(f"""Container {container_id} ({container_name}) stopped with 
-        - image={image_name} 
-        - labels={labels}
-    
+    logger.info(f"""
+Container {container_id} ({container_name}) stopped with 
+    - image={image_name} 
+    - labels={labels}
+
 """)
+
+    user_instance = DojoUserInstance(
+        instance_name=container_name,
+        instance_id=container_id,
+        user_id=labels.get("dojo.user_id", ""),
+        dojo_id=labels.get("dojo.dojo_id", ""),
+        module_id=labels.get("dojo.module_id", ""),
+        challenge_id=labels.get("dojo.challenge_id", ""),
+    )
+    if not user_instance.is_valid():
+        logger.debug(
+            f"Container {container_id} does not correspond to a valid DojoUserInstance, skipping compose down"
+        )
+        return
+
+    if user_instance.has_compose_file():
+        logger.debug(
+            f"User instance has compose file, executing docker-compose down for {user_instance.compose_file_path}"
+        )
+        try:
+            DojoComposeManager(user_instance).exec_compose_down()
+        except Exception:
+            logger.exception(
+                f"Error executing docker-compose down for {user_instance.compose_file_path}"
+            )
+    else:
+        logger.debug(
+            f"No compose file found for user instance, skipping compose down << {user_instance.compose_file_path} >>"
+        )
 
 
 def resolve_container(
